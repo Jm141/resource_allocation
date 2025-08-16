@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= $page_title ?? 'Resource Allocation System' ?></title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <!-- Leaflet CSS for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS with Orange Theme -->
+    <style>
+        :root {
+            --primary-orange: #FF6B35;
+            --secondary-orange: #FF8C42;
+            --accent-orange: #FFA726;
+            --light-orange: #FFE0B2;
+            --dark-orange: #E65100;
+        }
+
+        body {
+            background-color: #F8F9FA;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .navbar-custom {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange)) !important;
+            box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3);
+        }
+
+        .navbar-custom .navbar-brand,
+        .navbar-custom .navbar-nav .nav-link {
+            color: white !important;
+            font-weight: 600;
+        }
+
+        .sidebar {
+            background: white;
+            border-right: 3px solid var(--primary-orange);
+            min-height: calc(100vh - 76px);
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+
+        .sidebar .nav-link {
+            color: #2C3E50;
+            padding: 12px 20px;
+            border-left: 4px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .sidebar .nav-link:hover,
+        .sidebar .nav-link.active {
+            background-color: var(--light-orange);
+            color: var(--dark-orange);
+            border-left-color: var(--primary-orange);
+        }
+
+        .sidebar .nav-link i {
+            margin-right: 10px;
+            color: var(--primary-orange);
+            width: 20px;
+        }
+
+        .main-content {
+            padding: 30px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            margin: 20px;
+        }
+
+        .card-custom {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card-custom:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header-custom {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 20px;
+            font-weight: 600;
+        }
+
+        .btn-orange {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            border: none;
+            color: white;
+            border-radius: 25px;
+            padding: 10px 25px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-orange:hover {
+            background: linear-gradient(135deg, var(--dark-orange), var(--primary-orange));
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 107, 53, 0.4);
+        }
+
+        .status-badge {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.85em;
+        }
+
+        .status-reported { background-color: #FFF3E0; color: #E65100; }
+        .status-assigned { background-color: #E3F2FD; color: #1565C0; }
+        .status-in_progress { background-color: #E8F5E8; color: #2E7D32; }
+        .status-resolved { background-color: #F3E5F5; color: #7B1FA2; }
+        .status-closed { background-color: #F5F5F5; color: #616161; }
+
+        .priority-badge {
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-weight: 600;
+            font-size: 0.8em;
+        }
+
+        .priority-critical { background-color: #FFEBEE; color: #C62828; }
+        .priority-high { background-color: #FFF3E0; color: #E65100; }
+        .priority-medium { background-color: #FFF8E1; color: #F57F17; }
+        .priority-low { background-color: #F1F8E9; color: #558B2F; }
+
+        .stats-card {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            color: white;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stats-card .number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .stats-card .label {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .table-custom {
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .table-custom thead th {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            color: white;
+            border: none;
+            padding: 15px;
+            font-weight: 600;
+        }
+
+        .table-custom tbody tr:hover {
+            background-color: var(--light-orange);
+            transition: all 0.3s ease;
+        }
+
+        .alert-custom {
+            border-radius: 15px;
+            border: none;
+            padding: 15px 20px;
+        }
+
+        .alert-success { background-color: #E8F5E8; color: #2E7D32; }
+        .alert-danger { background-color: #FFEBEE; color: #C62828; }
+        .alert-warning { background-color: #FFF3E0; color: #E65100; }
+        .alert-info { background-color: #E3F2FD; color: #1565C0; }
+
+        .footer {
+            background: #2C3E50;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin-top: 50px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-custom">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="index.php">
+                <i class="fas fa-shield-alt me-2"></i>
+                Resource Allocation System
+            </a>
+            
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.php">
+                            <i class="fas fa-home me-1"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.php?action=incidents">
+                            <i class="fas fa-exclamation-triangle me-1"></i> Incidents
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.php?action=deployments">
+                            <i class="fas fa-truck me-1"></i> Deployments
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.php?action=map">
+                            <i class="fas fa-map me-1"></i> Map
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="index.php?action=report">
+                            <i class="fas fa-plus-circle me-1"></i> Report Incident
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2">
+                <div class="sidebar">
+                    <nav class="nav flex-column">
+                        <a class="nav-link <?= $action == 'dashboard' ? 'active' : '' ?>" href="index.php">
+                            <i class="fas fa-tachometer-alt"></i> Dashboard
+                        </a>
+                        <a class="nav-link <?= $action == 'incidents' ? 'active' : '' ?>" href="index.php?action=incidents">
+                            <i class="fas fa-exclamation-triangle"></i> Incidents
+                        </a>
+                        <a class="nav-link <?= $action == 'deployments' ? 'active' : '' ?>" href="index.php?action=deployments">
+                            <i class="fas fa-truck"></i> Deployments
+                        </a>
+                        <a class="nav-link <?= $action == 'map' ? 'active' : '' ?>" href="index.php?action=map">
+                            <i class="fas fa-map-marked-alt"></i> Live Map
+                        </a>
+                        <a class="nav-link <?= $action == 'report' ? 'active' : '' ?>" href="index.php?action=report">
+                            <i class="fas fa-plus-circle"></i> Report Incident
+                        </a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10">
+                <div class="main-content">
+                    <?php if (isset($_GET['success'])): ?>
+                        <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
+                            <i class="fas fa-check-circle me-2"></i>
+                            <?php
+                            $success = $_GET['success'];
+                            switch($success) {
+                                case 'created': echo 'Record created successfully!'; break;
+                                case 'updated': echo 'Record updated successfully!'; break;
+                                case 'deleted': echo 'Record deleted successfully!'; break;
+                                default: echo 'Operation completed successfully!';
+                            }
+                            ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (isset($_GET['error'])): ?>
+                        <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
+                            <i class="fas fa-exclamation-circle me-2"></i>
+                            <?php
+                            $error = $_GET['error'];
+                            switch($error) {
+                                case 'not_found': echo 'Record not found!'; break;
+                                case 'create_failed': echo 'Failed to create record!'; break;
+                                case 'update_failed': echo 'Failed to update record!'; break;
+                                case 'delete_failed': echo 'Failed to delete record!'; break;
+                                default: echo 'An error occurred!';
+                            }
+                            ?>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    <?php endif; ?>
+
+                    <!-- PAGE CONTENT GOES HERE -->
+                    <?php include $content_file; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="mb-0">
+                <i class="fas fa-shield-alt me-2"></i>
+                Resource Allocation System &copy; <?= date('Y') ?> - Emergency Response Management
+            </p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom JS -->
+    <script>
+        // Initialize DataTables
+        $(document).ready(function() {
+            $('.datatable').DataTable({
+                responsive: true,
+                pageLength: 10,
+                order: [[0, 'desc']]
+            });
+        });
+
+        // Auto-hide alerts after 5 seconds
+        setTimeout(function() {
+            $('.alert').fadeOut('slow');
+        }, 5000);
+    </script>
+</body>
+</html> 
