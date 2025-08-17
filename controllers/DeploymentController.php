@@ -2,6 +2,7 @@
 require_once 'models/Deployment.php';
 require_once 'models/Incident.php';
 require_once 'models/Facility.php';
+require_once 'config/database.php';
 
 class DeploymentController {
     private $deploymentModel;
@@ -458,6 +459,10 @@ class DeploymentController {
 
     private function queueDeployment($incident, $facilities) {
         try {
+            // Get database connection from one of the models
+            $database = new Database();
+            $conn = $database->getConnection();
+            
             // Add deployment to queue table
             $query = "INSERT INTO deployment_queue (incident_id, facilities, priority, created_at) 
                       VALUES (?, ?, ?, CURRENT_TIMESTAMP)";
@@ -465,7 +470,7 @@ class DeploymentController {
             $facilitiesJson = json_encode($facilities);
             $priority = $this->getIncidentPriorityScore($incident['priority']);
             
-            $stmt = $this->conn->prepare($query);
+            $stmt = $conn->prepare($query);
             $stmt->execute([$incident['id'], $facilitiesJson, $priority]);
             
             // Log the queuing
@@ -609,13 +614,16 @@ class DeploymentController {
 
     private function getAllDrivers() {
         try {
+            $database = new Database();
+            $conn = $database->getConnection();
+            
             $query = "SELECT d.*, u.first_name, u.last_name 
                       FROM drivers d 
                       LEFT JOIN users u ON d.user_id = u.id 
                       WHERE d.status = 'active' 
                       ORDER BY u.first_name, u.last_name";
             
-            $stmt = $this->conn->prepare($query);
+            $stmt = $conn->prepare($query);
             $stmt->execute();
             return $stmt->fetchAll();
         } catch (Exception $e) {
@@ -625,9 +633,12 @@ class DeploymentController {
 
     private function getAllVehicles() {
         try {
+            $database = new Database();
+            $conn = $database->getConnection();
+            
             $query = "SELECT * FROM vehicles WHERE status = 'available' ORDER BY vehicle_type, vehicle_id";
             
-            $stmt = $this->conn->prepare($query);
+            $stmt = $conn->prepare($query);
             $stmt->execute();
             return $stmt->fetchAll();
         } catch (Exception $e) {

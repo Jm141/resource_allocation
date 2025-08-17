@@ -154,5 +154,13 @@ class Facility {
         $stmt->execute();
         return $stmt->fetchAll();
     }
+
+    public function getCount() {
+        $query = "SELECT COUNT(*) as count FROM " . $this->table;
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    }
 }
 ?> 
