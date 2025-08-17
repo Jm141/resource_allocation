@@ -107,6 +107,24 @@ class Incident {
         return $stmt->fetchAll();
     }
 
+    public function getByStatuses($statuses) {
+        if (empty($statuses)) {
+            return [];
+        }
+        
+        $placeholders = str_repeat('?,', count($statuses) - 1) . '?';
+        $query = "SELECT i.*, ic.name as category_name, u.first_name, u.last_name 
+                  FROM " . $this->table . " i 
+                  LEFT JOIN incident_categories ic ON i.category_id = ic.id 
+                  LEFT JOIN users u ON i.reported_by = u.id 
+                  WHERE i.status IN ($placeholders)
+                  ORDER BY i.created_at DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute($statuses);
+        return $stmt->fetchAll();
+    }
+
     public function getByPriority($priority) {
         $query = "SELECT i.*, ic.name as category_name, u.first_name, u.last_name 
                   FROM " . $this->table . " i 
@@ -125,6 +143,27 @@ class Incident {
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function getCount() {
+        $query = "SELECT COUNT(*) as count FROM " . $this->table;
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    }
+
+    public function getCountByStatuses($statuses) {
+        if (empty($statuses)) {
+            return 0;
+        }
+        
+        $placeholders = str_repeat('?,', count($statuses) - 1) . '?';
+        $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE status IN ($placeholders)";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute($statuses);
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
     }
 
     public function search($search_term) {

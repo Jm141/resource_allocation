@@ -12,11 +12,12 @@ class Deployment {
 
     public function getAll($limit = null, $offset = null) {
         $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
-                         dr.first_name as driver_first_name, dr.last_name as driver_last_name,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
                          v.vehicle_id as vehicle_code, v.vehicle_type
                   FROM " . $this->table . " d
                   LEFT JOIN incidents i ON d.incident_id = i.id
                   LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
                   LEFT JOIN vehicles v ON d.vehicle_id = v.id
                   ORDER BY d.created_at DESC";
         
@@ -34,11 +35,12 @@ class Deployment {
 
     public function getById($id) {
         $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
-                         dr.first_name as driver_first_name, dr.last_name as driver_last_name,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
                          v.vehicle_id as vehicle_code, v.vehicle_type
                   FROM " . $this->table . " d
                   LEFT JOIN incidents i ON d.incident_id = i.id
                   LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
                   LEFT JOIN vehicles v ON d.vehicle_id = v.id
                   WHERE d.id = ?";
         
@@ -106,11 +108,12 @@ class Deployment {
 
     public function getByStatus($status) {
         $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
-                         dr.first_name as driver_first_name, dr.last_name as driver_last_name,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
                          v.vehicle_id as vehicle_code, v.vehicle_type
                   FROM " . $this->table . " d
                   LEFT JOIN incidents i ON d.incident_id = i.id
                   LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
                   LEFT JOIN vehicles v ON d.vehicle_id = v.id
                   WHERE d.status = ?
                   ORDER BY d.created_at DESC";
@@ -122,11 +125,12 @@ class Deployment {
 
     public function getByIncident($incident_id) {
         $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
-                         dr.first_name as driver_first_name, dr.last_name as driver_last_name,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
                          v.vehicle_id as vehicle_code, v.vehicle_type
                   FROM " . $this->table . " d
                   LEFT JOIN incidents i ON d.incident_id = i.id
                   LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
                   LEFT JOIN vehicles v ON d.vehicle_id = v.id
                   WHERE d.incident_id = ?
                   ORDER BY d.created_at DESC";
@@ -138,11 +142,12 @@ class Deployment {
 
     public function getActiveDeployments() {
         $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
-                         dr.first_name as driver_first_name, dr.last_name as driver_last_name,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
                          v.vehicle_id as vehicle_code, v.vehicle_type
                   FROM " . $this->table . " d
                   LEFT JOIN incidents i ON d.incident_id = i.id
                   LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
                   LEFT JOIN vehicles v ON d.vehicle_id = v.id
                   WHERE d.status IN ('dispatched', 'en_route', 'on_scene')
                   ORDER BY d.created_at DESC";
@@ -172,6 +177,27 @@ class Deployment {
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function getCount() {
+        $query = "SELECT COUNT(*) as count FROM " . $this->table;
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute();
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    }
+
+    public function getCountByStatuses($statuses) {
+        if (empty($statuses)) {
+            return 0;
+        }
+        
+        $placeholders = str_repeat('?,', count($statuses) - 1) . '?';
+        $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE status IN ($placeholders)";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute($statuses);
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
     }
 }
 ?> 

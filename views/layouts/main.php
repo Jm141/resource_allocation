@@ -30,31 +30,50 @@
         body {
             background-color: #F8F9FA;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        .navbar-custom {
-            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange)) !important;
-            box-shadow: 0 2px 10px rgba(255, 107, 53, 0.3);
-        }
-
-        .navbar-custom .navbar-brand,
-        .navbar-custom .navbar-nav .nav-link {
-            color: white !important;
-            font-weight: 600;
+            margin: 0;
+            padding: 0;
         }
 
         .sidebar {
             background: white;
             border-right: 3px solid var(--primary-orange);
-            min-height: calc(100vh - 76px);
+            min-height: 100vh;
             box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            background: linear-gradient(135deg, var(--primary-orange), var(--secondary-orange));
+            color: white;
+            padding: 25px 20px;
+            text-align: center;
+            border-bottom: 3px solid var(--dark-orange);
+        }
+
+        .sidebar-header h4 {
+            margin: 0;
+            font-weight: 700;
+            font-size: 1.3rem;
+        }
+
+        .sidebar-header .subtitle {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-top: 5px;
         }
 
         .sidebar .nav-link {
             color: #2C3E50;
-            padding: 12px 20px;
+            padding: 15px 25px;
             border-left: 4px solid transparent;
             transition: all 0.3s ease;
+            font-weight: 500;
+            border-radius: 0 25px 25px 0;
+            margin: 5px 0;
         }
 
         .sidebar .nav-link:hover,
@@ -62,20 +81,25 @@
             background-color: var(--light-orange);
             color: var(--dark-orange);
             border-left-color: var(--primary-orange);
+            transform: translateX(5px);
         }
 
         .sidebar .nav-link i {
-            margin-right: 10px;
+            margin-right: 15px;
             color: var(--primary-orange);
             width: 20px;
+            font-size: 1.1rem;
         }
 
         .main-content {
+            margin-left: 280px;
             padding: 30px;
             background: white;
             border-radius: 15px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            margin: 20px;
+            margin-top: 20px;
+            margin-right: 20px;
+            min-height: calc(100vh - 40px);
         }
 
         .card-custom {
@@ -199,120 +223,151 @@
             text-align: center;
             padding: 20px;
             margin-top: 50px;
+            margin-left: 280px;
+        }
+
+        /* Responsive sidebar */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+            
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            
+            .main-content {
+                margin-left: 20px;
+                margin-right: 20px;
+            }
+            
+            .footer {
+                margin-left: 20px;
+            }
+            
+            .sidebar-toggle {
+                display: block;
+                position: fixed;
+                top: 20px;
+                left: 20px;
+                z-index: 1001;
+                background: var(--primary-orange);
+                color: white;
+                border: none;
+                border-radius: 50%;
+                width: 50px;
+                height: 50px;
+                font-size: 1.2rem;
+            }
+        }
+        
+        .sidebar-toggle {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-custom">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="index.php">
-                <i class="fas fa-shield-alt me-2"></i>
-                Resource Allocation System
+    <!-- Mobile Sidebar Toggle -->
+    <button class="sidebar-toggle" id="sidebarToggle">
+        <i class="fas fa-bars"></i>
+    </button>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h4><i class="fas fa-shield-alt me-2"></i>Resource Allocation</h4>
+            <div class="subtitle">Emergency Response System</div>
+        </div>
+        
+        <nav class="nav flex-column mt-3">
+            <a class="nav-link <?= $action == 'dashboard' ? 'active' : '' ?>" href="index.php">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+            <a class="nav-link <?= $action == 'incidents' ? 'active' : '' ?>" href="index.php?action=incidents">
+                <i class="fas fa-exclamation-triangle"></i> Incidents
+            </a>
+            <a class="nav-link <?= $action == 'deployments' ? 'active' : '' ?>" href="index.php?action=deployments">
+                <i class="fas fa-truck"></i> Deployments
+            </a>
+            <a class="nav-link <?= $action == 'map' ? 'active' : '' ?>" href="index.php?action=map">
+                <i class="fas fa-map-marked-alt"></i> Live Map
+            </a>
+            <a class="nav-link <?= $action == 'report' ? 'active' : '' ?>" href="index.php?action=report">
+                <i class="fas fa-plus-circle"></i> Report Incident
+            </a>
+            <a class="nav-link <?= $action == 'hotline' ? 'active' : '' ?>" href="index.php?action=hotline">
+                <i class="fas fa-phone-alt"></i> Emergency Hotline
             </a>
             
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav ms-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.php">
-                            <i class="fas fa-home me-1"></i> Dashboard
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.php?action=incidents">
-                            <i class="fas fa-exclamation-triangle me-1"></i> Incidents
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.php?action=deployments">
-                            <i class="fas fa-truck me-1"></i> Deployments
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.php?action=map">
-                            <i class="fas fa-map me-1"></i> Map
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="index.php?action=report">
-                            <i class="fas fa-plus-circle me-1"></i> Report Incident
-                        </a>
-                    </li>
-                </ul>
+            <!-- Admin Section -->
+            <div class="mt-4 pt-3 border-top">
+                <h6 class="text-muted text-uppercase small px-3 mb-2">Administration</h6>
+                <a class="nav-link <?= $action == 'admin' ? 'active' : '' ?>" href="index.php?action=admin">
+                    <i class="fas fa-cogs"></i> System Admin
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'users' ? 'active' : '' ?>" href="index.php?action=admin&method=users">
+                    <i class="fas fa-users"></i> User Management
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'vehicles' ? 'active' : '' ?>" href="index.php?action=admin&method=vehicles">
+                    <i class="fas fa-truck"></i> Vehicle Management
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'drivers' ? 'active' : '' ?>" href="index.php?action=admin&method=drivers">
+                    <i class="fas fa-user-tie"></i> Driver Management
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'incidents' ? 'active' : '' ?>" href="index.php?action=admin&method=incidents">
+                    <i class="fas fa-exclamation-triangle"></i> Incident Management
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'deployments' ? 'active' : '' ?>" href="index.php?action=admin&method=deployments">
+                    <i class="fas fa-route"></i> Deployment Management
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'hotline' ? 'active' : '' ?>" href="index.php?action=admin&method=hotline">
+                    <i class="fas fa-phone-alt"></i> Hotline Management
+                </a>
+                <a class="nav-link <?= $action == 'admin' && $method == 'settings' ? 'active' : '' ?>" href="index.php?action=admin&method=settings">
+                    <i class="fas fa-cog"></i> System Settings
+                </a>
             </div>
-        </div>
-    </nav>
+        </nav>
+    </div>
 
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <div class="col-md-3 col-lg-2">
-                <div class="sidebar">
-                    <nav class="nav flex-column">
-                        <a class="nav-link <?= $action == 'dashboard' ? 'active' : '' ?>" href="index.php">
-                            <i class="fas fa-tachometer-alt"></i> Dashboard
-                        </a>
-                        <a class="nav-link <?= $action == 'incidents' ? 'active' : '' ?>" href="index.php?action=incidents">
-                            <i class="fas fa-exclamation-triangle"></i> Incidents
-                        </a>
-                        <a class="nav-link <?= $action == 'deployments' ? 'active' : '' ?>" href="index.php?action=deployments">
-                            <i class="fas fa-truck"></i> Deployments
-                        </a>
-                        <a class="nav-link <?= $action == 'map' ? 'active' : '' ?>" href="index.php?action=map">
-                            <i class="fas fa-map-marked-alt"></i> Live Map
-                        </a>
-                        <a class="nav-link <?= $action == 'report' ? 'active' : '' ?>" href="index.php?action=report">
-                            <i class="fas fa-plus-circle"></i> Report Incident
-                        </a>
-                    </nav>
-                </div>
+    <!-- Main Content -->
+    <div class="main-content">
+        <?php if (isset($_GET['success'])): ?>
+            <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
+                <i class="fas fa-check-circle me-2"></i>
+                <?php
+                $success = $_GET['success'];
+                switch($success) {
+                    case 'created': echo 'Record created successfully!'; break;
+                    case 'updated': echo 'Record updated successfully!'; break;
+                    case 'deleted': echo 'Record deleted successfully!'; break;
+                    default: echo 'Operation completed successfully!';
+                }
+                ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
+        <?php endif; ?>
 
-            <!-- Main Content -->
-            <div class="col-md-9 col-lg-10">
-                <div class="main-content">
-                    <?php if (isset($_GET['success'])): ?>
-                        <div class="alert alert-success alert-custom alert-dismissible fade show" role="alert">
-                            <i class="fas fa-check-circle me-2"></i>
-                            <?php
-                            $success = $_GET['success'];
-                            switch($success) {
-                                case 'created': echo 'Record created successfully!'; break;
-                                case 'updated': echo 'Record updated successfully!'; break;
-                                case 'deleted': echo 'Record deleted successfully!'; break;
-                                default: echo 'Operation completed successfully!';
-                            }
-                            ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    <?php endif; ?>
-
-                    <?php if (isset($_GET['error'])): ?>
-                        <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
-                            <i class="fas fa-exclamation-circle me-2"></i>
-                            <?php
-                            $error = $_GET['error'];
-                            switch($error) {
-                                case 'not_found': echo 'Record not found!'; break;
-                                case 'create_failed': echo 'Failed to create record!'; break;
-                                case 'update_failed': echo 'Failed to update record!'; break;
-                                case 'delete_failed': echo 'Failed to delete record!'; break;
-                                default: echo 'An error occurred!';
-                            }
-                            ?>
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        </div>
-                    <?php endif; ?>
-
-                    <!-- PAGE CONTENT GOES HERE -->
-                    <?php include $content_file; ?>
-                </div>
+        <?php if (isset($_GET['error'])): ?>
+            <div class="alert alert-danger alert-custom alert-dismissible fade show" role="alert">
+                <i class="fas fa-exclamation-circle me-2"></i>
+                <?php
+                $error = $_GET['error'];
+                switch($error) {
+                    case 'not_found': echo 'Record not found!'; break;
+                    case 'create_failed': echo 'Failed to create record!'; break;
+                    case 'update_failed': echo 'Failed to update record!'; break;
+                    case 'delete_failed': echo 'Failed to delete record!'; break;
+                    default: echo 'An error occurred!';
+                }
+                ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
-        </div>
+        <?php endif; ?>
+
+        <!-- PAGE CONTENT GOES HERE -->
+        <?php include $content_file; ?>
     </div>
 
     <!-- Footer -->
@@ -353,6 +408,23 @@
         setTimeout(function() {
             $('.alert').fadeOut('slow');
         }, 5000);
+
+        // Mobile sidebar toggle
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('show');
+        });
+
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebarToggle');
+            
+            if (window.innerWidth <= 768 && 
+                !sidebar.contains(e.target) && 
+                !toggle.contains(e.target)) {
+                sidebar.classList.remove('show');
+            }
+        });
     </script>
 </body>
 </html> 
