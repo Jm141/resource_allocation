@@ -5,7 +5,7 @@
     </h1>
     <div>
         <a href="index.php?action=admin&method=createUser" class="btn btn-orange">
-            <i class="fas fa-user-plus me-2"></i>Add New User
+            <i class="fas fa-plus-circle me-2"></i>Create User
         </a>
     </div>
 </div>
@@ -18,94 +18,77 @@
         </h5>
     </div>
     <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover datatable" id="usersTable">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Username</th>
-                        <th>Name</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Phone</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (isset($users) && is_array($users)): ?>
+        <?php if (empty($users)): ?>
+            <div class="text-center text-muted py-5">
+                <i class="fas fa-users fa-3x mb-3"></i>
+                <h5>No Users Found</h5>
+                <p>No users have been created yet.</p>
+                <a href="index.php?action=admin&method=createUser" class="btn btn-orange">
+                    <i class="fas fa-plus-circle me-2"></i>Create First User
+                </a>
+            </div>
+        <?php else: ?>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         <?php foreach ($users as $user): ?>
                         <tr>
+                            <td><?= $user['id'] ?></td>
                             <td>
-                                <span class="badge bg-secondary"><?= htmlspecialchars($user['id']) ?></span>
+                                <div class="fw-bold"><?= htmlspecialchars($user['first_name'] . ' ' . $user['last_name']) ?></div>
+                                <small class="text-muted"><?= htmlspecialchars($user['username'] ?? 'N/A') ?></small>
                             </td>
+                            <td><?= htmlspecialchars($user['email'] ?? 'N/A') ?></td>
                             <td>
-                                <div class="fw-bold"><?= htmlspecialchars($user['username']) ?></div>
-                            </td>
-                            <td>
-                                <?= htmlspecialchars($user['first_name'] . ' ' . $user['last_name']) ?>
-                            </td>
-                            <td>
-                                <span class="text-primary"><?= htmlspecialchars($user['email']) ?></span>
-                            </td>
-                            <td>
-                                <span class="badge bg-<?= $user['role'] === 'admin' ? 'danger' : ($user['role'] === 'driver' ? 'warning' : 'info') ?>">
-                                    <?= ucfirst($user['role']) ?>
+                                <span class="badge bg-<?= ($user['role'] === 'admin') ? 'danger' : (($user['role'] === 'driver') ? 'warning' : 'info') ?>">
+                                    <?= ucfirst($user['role'] ?? 'operator') ?>
                                 </span>
                             </td>
                             <td>
-                                <?= htmlspecialchars($user['phone'] ?? 'N/A') ?>
-                            </td>
-                            <td>
-                                <span class="badge bg-<?= $user['is_active'] ? 'success' : 'secondary' ?>">
-                                    <?= $user['is_active'] ? 'Active' : 'Inactive' ?>
+                                <span class="badge bg-<?= (isset($user['is_active']) && $user['is_active']) ? 'success' : 'secondary' ?>">
+                                    <?= (isset($user['is_active']) && $user['is_active']) ? 'Active' : 'Inactive' ?>
                                 </span>
                             </td>
                             <td>
                                 <small class="text-muted">
-                                    <?= date('M d, Y H:i', strtotime($user['created_at'])) ?>
+                                    <?= date('M d, Y H:i', strtotime($user['created_at'] ?? 'now')) ?>
                                 </small>
                             </td>
                             <td>
                                 <div class="btn-group" role="group">
                                     <a href="index.php?action=admin&method=editUser&id=<?= $user['id'] ?>" 
-                                       class="btn btn-sm btn-outline-warning" title="Edit User">
+                                       class="btn btn-sm btn-outline-warning" title="Edit">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     <button type="button" class="btn btn-sm btn-outline-danger" 
-                                            onclick="deleteUser(<?= $user['id'] ?>, '<?= htmlspecialchars($user['username']) ?>')" title="Delete User">
+                                            onclick="deleteUser(<?= $user['id'] ?>)" title="Delete">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
                             </td>
                         </tr>
                         <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
-                                <i class="fas fa-users fa-2x mb-2"></i>
-                                <p>No users found</p>
-                            </td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
     </div>
 </div>
 
 <script>
-$(document).ready(function() {
-    $('#usersTable').DataTable({
-        responsive: true,
-        pageLength: 25,
-        order: [[0, 'desc']]
-    });
-});
-
-function deleteUser(userId, username) {
-    if (confirm(`Are you sure you want to delete user '${username}'? This action cannot be undone.`)) {
+function deleteUser(userId) {
+    if (confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
         window.location.href = 'index.php?action=admin&method=deleteUser&id=' + userId;
     }
 }

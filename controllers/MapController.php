@@ -1,7 +1,8 @@
 <?php
-require_once 'models/Incident.php';
-require_once 'models/Deployment.php';
-require_once 'models/Facility.php';
+require_once __DIR__ . '/../models/Incident.php';
+require_once __DIR__ . '/../models/Deployment.php';
+require_once __DIR__ . '/../models/Facility.php';
+require_once __DIR__ . '/../config/database.php';
 
 class MapController {
     private $incidentModel;
@@ -10,6 +11,11 @@ class MapController {
     private $osrmBaseUrl = 'http://router.project-osrm.org/route/v1/driving/';
 
     public function __construct() {
+        // Start output buffering to prevent accidental output
+        if (ob_get_level() == 0) {
+            ob_start();
+        }
+        
         $this->incidentModel = new Incident();
         $this->deploymentModel = new Deployment();
         $this->facilityModel = new Facility();
@@ -20,24 +26,63 @@ class MapController {
     }
 
     public function getMapData() {
-        // Get active incidents (reported, assigned, in_progress)
-        $activeIncidents = $this->incidentModel->getByStatuses(['reported', 'assigned', 'in_progress']);
-        
-        // Get active deployments
-        $activeDeployments = $this->deploymentModel->getActiveDeployments();
-        
-        // Get all emergency facilities
-        $facilities = $this->facilityModel->getActiveFacilities();
-        
-        // Format data for map
-        $mapData = [
-            'incidents' => $this->formatIncidentsForMap($activeIncidents),
-            'deployments' => $this->formatDeploymentsForMap($activeDeployments),
-            'facilities' => $this->formatFacilitiesForMap($facilities)
-        ];
-        
-        header('Content-Type: application/json');
-        echo json_encode($mapData);
+        try {
+            // Set JSON header first to prevent HTML output
+            header('Content-Type: application/json');
+            
+            // Check if models are properly initialized
+            if (!$this->incidentModel || !$this->deploymentModel || !$this->facilityModel) {
+                throw new Exception('Models not properly initialized');
+            }
+            
+            // Test database connection for each model
+            $database = new Database();
+            $conn = $database->getConnection();
+            if (!$conn) {
+                throw new Exception('Database connection failed');
+            }
+            
+            // Get active incidents (reported, assigned, in_progress)
+            $activeIncidents = $this->incidentModel->getByStatuses(['reported', 'assigned', 'in_progress']);
+            
+            // Get active deployments
+            $activeDeployments = $this->deploymentModel->getActiveDeployments();
+            
+            // Get all emergency facilities
+            $facilities = $this->facilityModel->getActiveFacilities();
+            
+            // Debug logging
+            error_log("MapController::getMapData - Active Incidents: " . count($activeIncidents));
+            error_log("MapController::getMapData - Active Deployments: " . count($activeDeployments));
+            error_log("MapController::getMapData - Facilities: " . count($facilities));
+            
+            // Format data for map
+            $mapData = [
+                'incidents' => $this->formatIncidentsForMap($activeIncidents),
+                'deployments' => $this->formatDeploymentsForMap($activeDeployments),
+                'facilities' => $this->formatFacilitiesForMap($facilities)
+            ];
+            
+            // Ensure no output before JSON
+            if (ob_get_length()) ob_clean();
+            
+            echo json_encode($mapData);
+            
+        } catch (Exception $e) {
+            // Log the error
+            error_log("MapController::getMapData Error: " . $e->getMessage());
+            error_log("MapController::getMapData Stack Trace: " . $e->getTraceAsString());
+            
+            // Return error as JSON
+            http_response_code(500);
+            echo json_encode([
+                'error' => 'Failed to load map data: ' . $e->getMessage(),
+                'debug' => [
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
+            ]);
+        }
     }
 
     public function getRouteOptimization() {
@@ -93,11 +138,38 @@ class MapController {
             return;
         }
         
-        // Get all active incidents for route analysis
+        // Validate coordinate ranges
+        if (!is_numeric($startLat) || !is_numeric($startLng) || !is_numeric($endLat) || !is_numeric($endLng)) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Invalid coordinate format']);
+            return;
+        }
+        
+        if ($startLat < -90 || $startLat > 90 || $endLat < -90 || $endLat > 90 ||
+            $startLng < -180 || $startLng > 180 || $endLng < -180 || $endLng > 180) {
+            http_response_code(400);
+            echo json_encode(['error' => 'Coordinates out of valid range']);
+            return;
+        }
+        
+        // Get ONLY active incidents for route analysis (no resolved/completed)
         $activeIncidents = $this->incidentModel->getByStatuses(['reported', 'assigned', 'in_progress']);
         
         // Calculate route with incident avoidance
         $route = $this->calculateIncidentAvoidanceRoute($startLat, $startLng, $endLat, $endLng, $activeIncidents);
+        
+        // Ensure we only return one route
+        if (isset($route['error'])) {
+            echo json_encode($route);
+            return;
+        }
+        
+        // Add flag to ensure single route display
+        $route['is_single_route'] = true;
+        $route['route_count'] = 1;
+        
+        // Log for debugging
+        error_log("Incident avoidance route calculated - Single route returned");
         
         header('Content-Type: application/json');
         echo json_encode($route);
@@ -129,16 +201,19 @@ class MapController {
             $formatted[] = [
                 'id' => $deployment['id'],
                 'deployment_id' => $deployment['deployment_id'],
-                'incident_title' => $deployment['incident_title'],
+                'incident_title' => $deployment['incident_title'] ?? 'N/A',
                 'driver_name' => ($deployment['driver_first_name'] ?? '') . ' ' . ($deployment['driver_last_name'] ?? ''),
-                'vehicle_code' => $deployment['vehicle_code'],
-                'vehicle_type' => $deployment['vehicle_type'],
+                'vehicle_code' => $deployment['vehicle_code'] ?? 'N/A',
+                'vehicle_type' => $deployment['vehicle_type'] ?? 'N/A',
+                'start_location' => $deployment['start_location'] ?? 'N/A',
+                'end_location' => $deployment['end_location'] ?? 'N/A',
                 'start_lat' => $deployment['start_lat'],
                 'start_lng' => $deployment['start_lng'],
                 'end_lat' => $deployment['end_lat'],
                 'end_lng' => $deployment['end_lng'],
                 'status' => $deployment['status'],
-                'icon' => $this->getDeploymentIcon($deployment['vehicle_type'], $deployment['status'])
+                'created_at' => $deployment['created_at'],
+                'icon' => $this->getDeploymentIcon($deployment['vehicle_type'] ?? 'truck', $deployment['status'])
             ];
         }
         return $formatted;
@@ -149,14 +224,14 @@ class MapController {
         foreach ($facilities as $facility) {
             $formatted[] = [
                 'id' => $facility['id'],
-                'facility_id' => $facility['facility_id'],
+                'facility_id' => $facility['id'], // Use id as facility_id
                 'name' => $facility['name'],
-                'type' => $facility['type'],
+                'type' => $facility['facility_type'], // Use facility_type field
                 'latitude' => $facility['latitude'],
                 'longitude' => $facility['longitude'],
                 'address' => $facility['address'],
-                'status' => $facility['status'],
-                'icon' => $this->getFacilityIcon($facility['type'], $facility['status'])
+                'status' => $facility['is_active'] ? 'operational' : 'offline', // Derive status from is_active
+                'icon' => $this->getFacilityIcon($facility['facility_type'], $facility['is_active'] ? 'operational' : 'offline')
             ];
         }
         return $formatted;
@@ -277,6 +352,11 @@ class MapController {
     }
 
     private function calculateIncidentAvoidanceRoute($startLat, $startLng, $endLat, $endLng, $incidents) {
+        // Validate that we have valid coordinates
+        if (!$this->validateCoordinates($startLat, $startLng, $endLat, $endLng)) {
+            return ['error' => 'Invalid coordinates provided'];
+        }
+        
         // First, get the direct route
         $directRoute = $this->getOSRMRouteData($startLat, $startLng, $endLat, $endLng, false);
         
@@ -284,7 +364,7 @@ class MapController {
             return $directRoute;
         }
         
-        // Check if route intersects with any incidents
+        // Check if route intersects with any ACTIVE incidents only
         $intersectingIncidents = $this->checkRouteIncidentIntersection($directRoute, $incidents);
         
         if (empty($intersectingIncidents)) {
@@ -295,10 +375,41 @@ class MapController {
         // Route intersects with incidents, calculate alternative routes
         $alternativeRoutes = $this->calculateAlternativeRoutes($startLat, $startLng, $endLat, $endLng, $intersectingIncidents);
         
-        // Select the best alternative route
+        if (empty($alternativeRoutes)) {
+            // If no alternative routes found, return direct route with warning
+            $directRoute['warnings'] = ['Unable to find alternative route, proceeding with direct route'];
+            return $directRoute;
+        }
+        
+        // Select the BEST alternative route (only one)
         $bestRoute = $this->selectBestAlternativeRoute($alternativeRoutes, $directRoute);
         
+        // Ensure we only return one route with proper validation
+        if (isset($bestRoute['error'])) {
+            return $directRoute; // Fallback to direct route
+        }
+        
         return $bestRoute;
+    }
+    
+    private function validateCoordinates($startLat, $startLng, $endLat, $endLng) {
+        // Check if coordinates are numeric
+        if (!is_numeric($startLat) || !is_numeric($startLng) || !is_numeric($endLat) || !is_numeric($endLng)) {
+            return false;
+        }
+        
+        // Check coordinate ranges
+        if ($startLat < -90 || $startLat > 90 || $endLat < -90 || $endLat > 90 ||
+            $startLng < -180 || $startLng > 180 || $endLng < -180 || $endLng > 180) {
+            return false;
+        }
+        
+        // Check if start and end are different
+        if ($startLat == $endLat && $startLng == $endLng) {
+            return false;
+        }
+        
+        return true;
     }
 
     private function checkRouteIncidentIntersection($route, $incidents) {
@@ -370,13 +481,13 @@ class MapController {
             $incidentLng = $incident['longitude'];
             $avoidanceRadius = $this->getIncidentAvoidanceRadius($incident['priority']);
             
-            // Calculate perpendicular offset points
-            $offsetPoints = $this->calculatePerpendicularOffset($startLat, $startLng, $endLat, $endLng, $incidentLat, $incidentLng, $avoidanceRadius);
+            // Calculate only ONE optimal waypoint per incident (not two perpendicular offsets)
+            $optimalWaypoint = $this->calculateOptimalAvoidanceWaypoint($startLat, $startLng, $endLat, $endLng, $incidentLat, $incidentLng, $avoidanceRadius);
             
-            foreach ($offsetPoints as $point) {
+            if ($optimalWaypoint) {
                 $waypoints[] = [
-                    'lat' => $point['lat'],
-                    'lng' => $point['lng'],
+                    'lat' => $optimalWaypoint['lat'],
+                    'lng' => $optimalWaypoint['lng'],
                     'incident_id' => $incident['id'],
                     'priority' => $incident['priority']
                 ];
@@ -386,34 +497,34 @@ class MapController {
         return $waypoints;
     }
 
-    private function calculatePerpendicularOffset($startLat, $startLng, $endLat, $endLng, $incidentLat, $incidentLng, $avoidanceRadius) {
-        $offsetPoints = [];
-        
-        // Calculate the direction vector of the route
-        $routeVectorLat = $endLat - $startLat;
-        $routeVectorLng = $endLng - $startLng;
-        
-        // Calculate perpendicular vector (90-degree rotation)
-        $perpendicularLat = -$routeVectorLng;
-        $perpendicularLng = $routeVectorLat;
-        
-        // Normalize the perpendicular vector
-        $magnitude = sqrt($perpendicularLat * $perpendicularLat + $perpendicularLng * $perpendicularLng);
-        $perpendicularLat /= $magnitude;
-        $perpendicularLng /= $magnitude;
-        
-        // Calculate offset points on both sides of the incident
-        $offsetPoints[] = [
-            'lat' => $incidentLat + ($perpendicularLat * $avoidanceRadius),
-            'lng' => $incidentLng + ($perpendicularLng * $avoidanceRadius)
-        ];
-        
-        $offsetPoints[] = [
-            'lat' => $incidentLat - ($perpendicularLat * $avoidanceRadius),
-            'lng' => $incidentLng - ($perpendicularLng * $avoidanceRadius)
-        ];
-        
-        return $offsetPoints;
+    private function calculateOptimalAvoidanceWaypoint($startLat, $startLng, $endLat, $endLng, $incidentLat, $incidentLng, $avoidanceRadius) {
+        $optimalWaypoint = null;
+        $minDistance = PHP_INT_MAX;
+
+        // Define a grid of potential waypoints to check
+        $gridSize = 10; // Number of points to check along the route
+        $stepLat = ($endLat - $startLat) / $gridSize;
+        $stepLng = ($endLng - $startLng) / $gridSize;
+
+        for ($i = 0; $i <= $gridSize; $i++) {
+            for ($j = 0; $j <= $gridSize; $j++) {
+                $lat = $startLat + ($i * $stepLat);
+                $lng = $startLng + ($j * $stepLng);
+
+                // Ensure the waypoint is not too close to the incident
+                $distanceToIncident = $this->haversineDistance($lat, $lng, $incidentLat, $incidentLng);
+                if ($distanceToIncident > $avoidanceRadius) {
+                    // Calculate distance from start to the waypoint
+                    $distance = $this->haversineDistance($startLat, $startLng, $lat, $lng);
+                    if ($distance < $minDistance) {
+                        $minDistance = $distance;
+                        $optimalWaypoint = ['lat' => $lat, 'lng' => $lng];
+                    }
+                }
+            }
+        }
+
+        return $optimalWaypoint;
     }
 
     private function getOSRMRouteWithWaypoints($startLat, $startLng, $waypointLat, $waypointLng, $endLat, $endLng) {
@@ -466,7 +577,12 @@ class MapController {
             return $b['score'] <=> $a['score'];
         });
         
-        return $scoredRoutes[0]['route'];
+        // Return only the best route (single route)
+        $bestRoute = $scoredRoutes[0]['route'];
+        $bestRoute['is_single_route'] = true;
+        $bestRoute['route_type'] = 'incident_avoidance';
+        
+        return $bestRoute;
     }
 
     private function calculateRouteScore($route, $directRoute) {

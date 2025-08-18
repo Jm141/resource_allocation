@@ -1,5 +1,5 @@
 <?php
-require_once 'config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 class Deployment {
     private $conn;
@@ -95,9 +95,22 @@ class Deployment {
     }
 
     public function updateStatus($id, $status) {
-        $query = "UPDATE " . $this->table . " SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
-        $stmt = $this->conn->prepare($query);
-        return $stmt->execute([$status, $id]);
+        try {
+            $query = "UPDATE " . $this->table . " SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+            $stmt = $this->conn->prepare($query);
+            $result = $stmt->execute([$status, $id]);
+            
+            // Add debugging
+            error_log("Deployment::updateStatus - ID: $id, Status: $status, Result: " . ($result ? 'true' : 'false'));
+            if (!$result) {
+                error_log("Deployment::updateStatus - PDO Error: " . print_r($stmt->errorInfo(), true));
+            }
+            
+            return $result;
+        } catch (Exception $e) {
+            error_log("Deployment::updateStatus - Exception: " . $e->getMessage());
+            return false;
+        }
     }
 
     public function delete($id) {
@@ -140,6 +153,23 @@ class Deployment {
         return $stmt->fetchAll();
     }
 
+    public function getByDriver($driver_id) {
+        $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
+                         v.vehicle_id as vehicle_code, v.vehicle_type
+                  FROM " . $this->table . " d
+                  LEFT JOIN incidents i ON d.incident_id = i.id
+                  LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
+                  LEFT JOIN vehicles v ON d.vehicle_id = v.id
+                  WHERE d.driver_id = ? AND d.status IN ('dispatched', 'en_route', 'on_scene', 'returning')
+                  ORDER BY d.created_at DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([$driver_id]);
+        return $stmt->fetchAll();
+    }
+
     public function getActiveDeployments() {
         $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location,
                          u.first_name as driver_first_name, u.last_name as driver_last_name,
@@ -172,7 +202,7 @@ class Deployment {
         return $stmt->fetchAll();
     }
 
-    public function getCountByStatus() {
+    public function getCountByStatusGrouped() {
         $query = "SELECT status, COUNT(*) as count FROM " . $this->table . " GROUP BY status";
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
@@ -182,7 +212,14 @@ class Deployment {
     public function getCount() {
         $query = "SELECT COUNT(*) as count FROM " . $this->table;
         $stmt = $this->conn->prepare($query);
-        $stmt->execute();
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    }
+
+    public function getCountByStatus($status) {
+        $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE status = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([$status]);
         $result = $stmt->fetch();
         return $result['count'] ?? 0;
     }
@@ -198,6 +235,63 @@ class Deployment {
         $stmt->execute($statuses);
         $result = $stmt->fetch();
         return $result['count'] ?? 0;
+    }
+
+    public function getCountByDriver($driverId) {
+        $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE driver_id = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([$driverId]);
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    }
+
+    public function getCountByDriverAndStatus($driverId, $status) {
+        if (is_array($status)) {
+            $placeholders = str_repeat('?,', count($status) - 1) . '?';
+            $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE driver_id = ? AND status IN ($placeholders)";
+            $params = array_merge([$driverId], $status);
+        } else {
+            $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE driver_id = ? AND status = ?";
+            $params = [$driverId, $status];
+        }
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute($params);
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
+    }
+
+    public function getDeploymentsWithRouteInfo($driverId) {
+        $query = "SELECT d.*, i.title as incident_title, i.location_name as incident_location, i.priority,
+                         u.first_name as driver_first_name, u.last_name as driver_last_name,
+                         v.vehicle_id as vehicle_code, v.vehicle_type,
+                         (SELECT COUNT(*) FROM route_points rp WHERE rp.deployment_id = d.id) as route_points_count
+                  FROM " . $this->table . " d
+                  LEFT JOIN incidents i ON d.incident_id = i.id
+                  LEFT JOIN drivers dr ON d.driver_id = dr.id
+                  LEFT JOIN users u ON dr.user_id = u.id
+                  LEFT JOIN vehicles v ON d.vehicle_id = v.id
+                  WHERE d.driver_id = ? AND d.status IN ('dispatched', 'en_route', 'on_scene', 'returning')
+                  ORDER BY d.created_at DESC";
+        
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([$driverId]);
+        return $stmt->fetchAll();
+    }
+
+    public function getByIncidentAndStatus($incidentId, $statuses) {
+        if (empty($statuses)) {
+            return [];
+        }
+        
+        $placeholders = str_repeat('?,', count($statuses) - 1) . '?';
+        $query = "SELECT d.* FROM " . $this->table . " d 
+                  WHERE d.incident_id = ? AND d.status IN ($placeholders)";
+        
+        $params = array_merge([$incidentId], $statuses);
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
     }
 }
 ?> 

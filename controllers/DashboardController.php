@@ -1,9 +1,10 @@
 <?php
-require_once 'models/Incident.php';
-require_once 'models/Deployment.php';
-require_once 'models/User.php';
-require_once 'models/Vehicle.php';
-require_once 'models/Facility.php';
+require_once __DIR__ . '/../models/Incident.php';
+require_once __DIR__ . '/../models/Deployment.php';
+require_once __DIR__ . '/../models/User.php';
+require_once __DIR__ . '/../models/Vehicle.php';
+require_once __DIR__ . '/../models/Facility.php';
+require_once __DIR__ . '/../config/database.php';
 
 class DashboardController {
     private $incidentModel;
@@ -21,6 +22,9 @@ class DashboardController {
     }
 
     public function index() {
+        // Check for unreported incidents and auto-deploy if possible
+        $this->checkAndAutoDeploy();
+        
         // Get real-time statistics from database
         $stats = $this->getDashboardStats();
         
@@ -56,6 +60,64 @@ class DashboardController {
         
         // Include the main layout
         include 'views/layouts/main.php';
+    }
+
+    private function checkAndAutoDeploy() {
+        try {
+            // Get unreported incidents
+            $unreportedIncidents = $this->incidentModel->getByStatus('reported');
+            
+            if (empty($unreportedIncidents)) {
+                return; // No incidents to deploy
+            }
+            
+            // Check if there are available resources
+            $availableDrivers = $this->getAvailableDrivers();
+            $availableVehicles = $this->getAvailableVehicles();
+            
+            if (empty($availableDrivers) || empty($availableVehicles)) {
+                // Log that auto-deployment is queued due to no resources
+                error_log("Auto-deployment queued: No available drivers or vehicles");
+                return;
+            }
+            
+            // Auto-deploy incidents
+            $deploymentController = new DeploymentController();
+            $deploymentController->autoDeployUnreportedIncidents();
+            
+        } catch (Exception $e) {
+            error_log("Auto-deployment check failed: " . $e->getMessage());
+        }
+    }
+
+    private function getAvailableDrivers() {
+        try {
+            $database = new Database();
+            $conn = $database->getConnection();
+            
+            $query = "SELECT COUNT(*) as count FROM drivers WHERE status = 'available'";
+            $stmt = $conn->prepare($query);
+            $stmt->execute();
+            $result = $stmt->fetch();
+            return $result['count'] ?? 0;
+        } catch (Exception $e) {
+            return 0;
+        }
+    }
+
+    private function getAvailableVehicles() {
+        try {
+            $database = new Database();
+            $conn = $database->getConnection();
+            
+            $query = "SELECT COUNT(*) as count FROM vehicles WHERE status = 'available'";
+            $stmt = $conn->prepare($query);
+            $stmt->execute();
+            $result = $stmt->fetch();
+            return $result['count'] ?? 0;
+        } catch (Exception $e) {
+            return 0;
+        }
     }
 
     private function getDashboardStats() {
@@ -249,10 +311,10 @@ class DashboardController {
             $count = 0;
             
             foreach ($deployments as $deployment) {
-                if (isset($deployment['created_at']) && isset($deployment['completed_at'])) {
+                if (isset($deployment['created_at']) && isset($deployment['updated_at'])) {
                     $created = strtotime($deployment['created_at']);
-                    $completed = strtotime($deployment['completed_at']);
-                    $totalTime += ($completed - $created);
+                    $updated = strtotime($deployment['updated_at']);
+                    $totalTime += ($updated - $created);
                     $count++;
                 }
             }

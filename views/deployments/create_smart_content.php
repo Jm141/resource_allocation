@@ -87,6 +87,22 @@
                         fire trucks from the nearest fire station and ambulances from the nearest hospital.
                     </div>
 
+                    <!-- Auto-Deployment Section -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="form-label">Auto-Deployment System</label>
+                            <button type="button" class="btn btn-warning" onclick="autoDeployUnreportedIncidents()">
+                                <i class="fas fa-robot me-2"></i>Auto-Deploy All Unreported
+                            </button>
+                        </div>
+                        <div id="autoDeploymentStatus" class="mt-2" style="display: none;">
+                            <!-- Auto-deployment status will be displayed here -->
+                        </div>
+                        <small class="text-muted">
+                            Automatically deploys resources for all unreported incidents based on available drivers and vehicles.
+                        </small>
+                    </div>
+
                     <div id="deploymentOptions" style="display: none;">
                         <h6 class="mb-3">🚀 Recommended Deployment Strategy</h6>
                         <div id="optionsContainer"></div>
@@ -380,4 +396,60 @@ document.getElementById('smartDeploymentForm').addEventListener('submit', functi
         });
     }
 });
+
+// Auto-Deployment Functions
+function autoDeployUnreportedIncidents() {
+    if (!confirm('This will automatically deploy resources for ALL unreported incidents. Continue?')) {
+        return;
+    }
+    
+    const statusDiv = document.getElementById('autoDeploymentStatus');
+    statusDiv.style.display = 'block';
+    statusDiv.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Auto-deploying resources...</div>';
+    
+    fetch('index.php?action=deployments&method=autoDeployUnreportedIncidents')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                statusDiv.innerHTML = `<div class="alert alert-danger">❌ ${data.error}</div>`;
+                return;
+            }
+            
+            if (data.success) {
+                let resultsHtml = `
+                    <div class="alert alert-success">
+                        <h6 class="mb-2">🤖 Auto-Deployment Completed Successfully!</h6>
+                        <p><strong>${data.deployments_created}</strong> deployments created automatically.</p>
+                `;
+                
+                if (data.results && data.results.length > 0) {
+                    resultsHtml += '<div class="mt-2"><strong>Deployment Details:</strong><ul class="mt-1">';
+                    data.results.forEach(result => {
+                        resultsHtml += `
+                            <li>
+                                <strong>${result.incident}</strong> → 
+                                Driver: ${result.driver}, Vehicle: ${result.vehicle}
+                                <br><small class="text-muted">Facility: ${result.facility}</small>
+                            </li>
+                        `;
+                    });
+                    resultsHtml += '</ul></div>';
+                }
+                
+                resultsHtml += '</div>';
+                statusDiv.innerHTML = resultsHtml;
+                
+                // Refresh the page after 3 seconds to show new deployments
+                setTimeout(() => {
+                    location.reload();
+                }, 3000);
+            } else {
+                statusDiv.innerHTML = `<div class="alert alert-warning">⚠️ ${data.message}</div>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            statusDiv.innerHTML = '<div class="alert alert-danger">❌ Error during auto-deployment. Please try again.</div>';
+        });
+}
 </script> 

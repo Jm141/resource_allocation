@@ -13,6 +13,8 @@ require_once 'controllers/AdminController.php';
 require_once 'controllers/MapController.php';
 require_once 'controllers/FacilityController.php';
 require_once 'controllers/DashboardController.php';
+require_once 'controllers/DriverController.php';
+require_once 'controllers/HotlineController.php';
 
 // Route to appropriate controller
 switch ($action) {
@@ -144,7 +146,31 @@ switch ($action) {
         break;
         
     case 'hotline':
-        include 'views/hotline_dashboard.php';
+        $hotlineController = new HotlineController();
+        $hotlineController->index();
+        break;
+        
+    case 'driver':
+        $driverController = new DriverController();
+        $method = $_GET['method'] ?? 'index';
+        
+        if ($method === 'deployment' && isset($_GET['id'])) {
+            $driverController->deployment($_GET['id']);
+        } elseif ($method === 'updateStatus' && isset($_GET['id'])) {
+            $driverController->updateStatus($_GET['id']);
+        } elseif ($method === 'updateLocation') {
+            $driverController->updateLocation();
+        } elseif ($method === 'getActiveDeployments') {
+            $driverController->getActiveDeployments();
+        } elseif ($method === 'getDeploymentRoute') {
+            $driverController->getDeploymentRoute();
+        } elseif ($method === 'getTrafficAlerts') {
+            $driverController->getTrafficAlerts();
+        } elseif ($method === 'getDriverStats') {
+            $driverController->getDriverStats();
+        } else {
+            $driverController->index();
+        }
         break;
         
     case 'dashboard':

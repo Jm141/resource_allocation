@@ -1,10 +1,7 @@
 <?php
-$page_title = 'User Management - Resource Allocation System';
+$page_title = 'User Management - Admin';
 $action = 'admin';
-
-// Set the content file for the layout
+$method = 'users';
 $content_file = __DIR__ . '/users_content.php';
-
-// Include the main layout
 include 'views/layouts/main.php';
 ?> 

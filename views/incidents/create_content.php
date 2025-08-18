@@ -19,7 +19,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <form action="index.php?action=incidents&method=create" method="POST">
+                <form action="index.php?action=incidents&method=create" method="POST" id="incidentForm">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -87,35 +87,9 @@
                         </div>
                     </div>
                     
-                    <!-- Traffic Check Section -->
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <label class="form-label">Traffic & Route Information</label>
-                            <button type="button" class="btn btn-sm btn-info" onclick="checkTrafficAndRoute()">
-                                <i class="fas fa-route me-2"></i>Check Traffic & Route
-                            </button>
-                        </div>
-                        <div id="trafficInfo" class="mt-2" style="display: none;">
-                            <!-- Traffic information will be displayed here -->
-                        </div>
-                    </div>
-                    
-                    <!-- Coordinate Validation -->
-                    <div class="mb-3">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <label class="form-label">Coordinate Validation</label>
-                            <button type="button" class="btn btn-sm btn-success" onclick="validateCoordinates()">
-                                <i class="fas fa-map-marker-alt me-2"></i>Validate Coordinates
-                            </button>
-                        </div>
-                        <div id="coordinateValidation" class="mt-2" style="display: none;">
-                            <!-- Coordinate validation results will be displayed here -->
-                        </div>
-                    </div>
-                    
-                    <div class="text-end">
-                        <button type="submit" class="btn btn-orange">
-                            <i class="fas fa-paper-plane me-2"></i>Submit Report
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-save me-2"></i>Report Incident
                         </button>
                     </div>
                 </form>
@@ -179,153 +153,32 @@ document.addEventListener('DOMContentLoaded', function() {
             .catch(error => console.error('Error fetching address:', error));
     });
 
-    // Form validation
-    document.querySelector('form').addEventListener('submit', function(e) {
+    // Simple form validation
+    document.getElementById('incidentForm').addEventListener('submit', function(e) {
+        const title = document.getElementById('title').value.trim();
+        const description = document.getElementById('description').value.trim();
+        const location = document.getElementById('location_name').value.trim();
         const lat = document.getElementById('latitude').value;
         const lng = document.getElementById('longitude').value;
         
-        if (!lat || !lng) {
+        if (!title || !description || !location || !lat || !lng) {
             e.preventDefault();
-            alert('Please select a location on the map before submitting.');
+            alert('Please fill in all required fields.');
+            return;
+        }
+        
+        // Basic coordinate validation
+        if (lat < -90 || lat > 90) {
+            e.preventDefault();
+            alert('Latitude must be between -90 and 90.');
+            return;
+        }
+        
+        if (lng < -180 || lng > 180) {
+            e.preventDefault();
+            alert('Longitude must be between -180 and 180.');
+            return;
         }
     });
 });
-
-// Traffic and Route Checking Functions
-function checkTrafficAndRoute() {
-    const lat = document.getElementById('latitude').value;
-    const lng = document.getElementById('longitude').value;
-    
-    if (!lat || !lng) {
-        alert('Please enter coordinates first.');
-        return;
-    }
-    
-    // Show loading state
-    const trafficInfo = document.getElementById('trafficInfo');
-    trafficInfo.style.display = 'block';
-    trafficInfo.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin"></i> Checking traffic and calculating route...</div>';
-    
-    // Bago Headquarters coordinates
-    const bagoHQ = { lat: 10.526071, lng: 122.841451 };
-    
-    // Check for traffic incidents and calculate route
-    fetch(`index.php?action=map&method=getIncidentAvoidanceRoute&start_lat=${bagoHQ.lat}&start_lng=${bagoHQ.lng}&end_lat=${lat}&end_lng=${lng}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                trafficInfo.innerHTML = `<div class="alert alert-danger">Error: ${data.error}</div>`;
-                return;
-            }
-            
-            displayTrafficInfo(data, bagoHQ);
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            trafficInfo.innerHTML = '<div class="alert alert-danger">Error checking traffic and route.</div>';
-        });
-}
-
-function displayTrafficInfo(data, bagoHQ) {
-    const trafficInfo = document.getElementById('trafficInfo');
-    
-    let html = '<div class="alert alert-info">';
-    html += '<h6 class="mb-2"><i class="fas fa-route me-2"></i>Route & Traffic Information</h6>';
-    
-    // Route details
-    html += `<div class="row mb-2">`;
-    html += `<div class="col-md-6"><small class="text-muted">Total Distance:</small><br><strong>${data.distance} km</strong></div>`;
-    html += `<div class="col-md-6"><small class="text-muted">Estimated Time:</small><br><strong>${data.duration} minutes</strong></div>`;
-    html += `</div>`;
-    
-    // ETA calculation
-    const currentTime = new Date();
-    const etaTime = new Date(currentTime.getTime() + (data.duration * 60 * 1000));
-    html += `<div class="mb-2"><small class="text-muted">ETA from Bago HQ:</small><br><strong class="text-success">${etaTime.toLocaleTimeString()}</strong></div>`;
-    
-    // Traffic alerts
-    if (data.warnings && data.warnings.length > 0) {
-        html += '<div class="mt-2"><small class="text-warning fw-bold">🚨 Traffic Alerts:</small>';
-        data.warnings.forEach(warning => {
-            html += `<div class="small text-muted">• ${warning.message}</div>`;
-        });
-        html += '</div>';
-    } else {
-        html += '<div class="mt-2"><small class="text-success">✅ No traffic incidents detected on route</small></div>';
-    }
-    
-    // Route optimization
-    if (data.is_shortest_route) {
-        html += '<div class="mt-2"><small class="text-success">✅ Shortest route calculated via OSRM</small></div>';
-    }
-    
-    html += '</div>';
-    
-    trafficInfo.innerHTML = html;
-}
-
-function validateCoordinates() {
-    const lat = parseFloat(document.getElementById('latitude').value);
-    const lng = parseFloat(document.getElementById('longitude').value);
-    
-    if (!lat || !lng) {
-        alert('Please enter coordinates first.');
-        return;
-    }
-    
-    const coordinateValidation = document.getElementById('coordinateValidation');
-    coordinateValidation.style.display = 'block';
-    
-    let html = '<div class="alert alert-info">';
-    html += '<h6 class="mb-2"><i class="fas fa-map-marker-alt me-2"></i>Coordinate Validation</h6>';
-    
-    // Validate latitude range (-90 to 90)
-    if (lat >= -90 && lat <= 90) {
-        html += '<div class="text-success">✅ Latitude is valid</div>';
-    } else {
-        html += '<div class="text-danger">❌ Latitude must be between -90 and 90</div>';
-    }
-    
-    // Validate longitude range (-180 to 180)
-    if (lng >= -180 && lng <= 180) {
-        html += '<div class="text-success">✅ Longitude is valid</div>';
-    } else {
-        html += '<div class="text-danger">❌ Longitude must be between -180 and 180</div>';
-    }
-    
-    // Check if coordinates are in Bago City area (approximate bounds)
-    const bagoBounds = {
-        minLat: 10.4, maxLat: 10.6,
-        minLng: 122.7, maxLng: 122.9
-    };
-    
-    if (lat >= bagoBounds.minLat && lat <= bagoBounds.maxLat && 
-        lng >= bagoBounds.minLng && lng <= bagoBounds.maxLng) {
-        html += '<div class="text-success">✅ Coordinates are within Bago City area</div>';
-    } else {
-        html += '<div class="text-warning">⚠️ Coordinates are outside Bago City area</div>';
-    }
-    
-    // Calculate distance from Bago HQ
-    const bagoHQ = { lat: 10.526071, lng: 122.841451 };
-    const distance = haversineDistance(lat, lng, bagoHQ.lat, bagoHQ.lng);
-    
-    html += `<div class="mt-2"><small class="text-muted">Distance from Bago HQ:</small><br><strong>${distance.toFixed(2)} km</strong></div>`;
-    
-    html += '</div>';
-    
-    coordinateValidation.innerHTML = html;
-}
-
-// Haversine distance calculation
-function haversineDistance(lat1, lng1, lat2, lng2) {
-    const R = 6371; // Earth's radius in kilometers
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLng = (lng2 - lng1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
 </script> 

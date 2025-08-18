@@ -1,5 +1,5 @@
 <?php
-require_once 'config/database.php';
+require_once __DIR__ . '/../config/database.php';
 
 class Incident {
     private $conn;
@@ -138,11 +138,19 @@ class Incident {
         return $stmt->fetchAll();
     }
 
-    public function getCountByStatus() {
+    public function getCountByStatusGrouped() {
         $query = "SELECT status, COUNT(*) as count FROM " . $this->table . " GROUP BY status";
         $stmt = $this->conn->prepare($query);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    public function getCountByStatus($status) {
+        $query = "SELECT COUNT(*) as count FROM " . $this->table . " WHERE status = ?";
+        $stmt = $this->conn->prepare($query);
+        $stmt->execute([$status]);
+        $result = $stmt->fetch();
+        return $result['count'] ?? 0;
     }
 
     public function getCount() {

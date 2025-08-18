@@ -1,14 +1,24 @@
 <?php
-require_once 'models/Deployment.php';
-require_once 'models/Incident.php';
+require_once __DIR__ . '/../models/Deployment.php';
+require_once __DIR__ . '/../models/Incident.php';
+require_once __DIR__ . '/../models/User.php';
+require_once __DIR__ . '/../models/Vehicle.php';
+require_once __DIR__ . '/../models/Driver.php';
+require_once __DIR__ . '/../config/database.php';
 
 class AdminController {
     private $deploymentModel;
     private $incidentModel;
+    private $userModel;
+    private $vehicleModel;
+    private $driverModel;
 
     public function __construct() {
         $this->deploymentModel = new Deployment();
         $this->incidentModel = new Incident();
+        $this->userModel = new User();
+        $this->vehicleModel = new Vehicle();
+        $this->driverModel = new Driver();
     }
 
     public function index() {
@@ -52,22 +62,16 @@ class AdminController {
 
     public function createUser() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $database = new Database();
-            $conn = $database->getConnection();
+            $userData = [
+                'username' => $_POST['username'] ?? '',
+                'first_name' => $_POST['first_name'] ?? '',
+                'last_name' => $_POST['last_name'] ?? '',
+                'email' => $_POST['email'] ?? '',
+                'role' => $_POST['role'] ?? 'user',
+                'status' => $_POST['status'] ?? 'active'
+            ];
             
-            $username = $_POST['username'] ?? '';
-            $email = $_POST['email'] ?? '';
-            $password = $_POST['password'] ?? '';
-            $role = $_POST['role'] ?? 'operator';
-            $firstName = $_POST['first_name'] ?? '';
-            $lastName = $_POST['last_name'] ?? '';
-            $phone = $_POST['phone'] ?? '';
-            
-            $passwordHash = password_hash($password, PASSWORD_DEFAULT);
-            
-            $stmt = $conn->prepare("INSERT INTO users (username, email, password_hash, role, first_name, last_name, phone) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            
-            if ($stmt->execute([$username, $email, $passwordHash, $role, $firstName, $lastName, $phone])) {
+            if ($this->userModel->create($userData)) {
                 header('Location: index.php?action=admin&method=users&success=created');
             } else {
                 header('Location: index.php?action=admin&method=users&error=create_failed');
@@ -75,24 +79,26 @@ class AdminController {
             exit;
         }
         
-        include 'views/admin/create_user.php';
+        $page_title = 'Create User - Admin';
+        $action = 'admin';
+        $method = 'createUser';
+        
+        $content_file = __DIR__ . '/../views/admin/create_user_content.php';
+        include 'views/layouts/main.php';
     }
 
     public function editUser($id) {
-        $database = new Database();
-        $conn = $database->getConnection();
-        
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $email = $_POST['email'] ?? '';
-            $role = $_POST['role'] ?? 'operator';
-            $firstName = $_POST['first_name'] ?? '';
-            $lastName = $_POST['last_name'] ?? '';
-            $phone = $_POST['phone'] ?? '';
-            $isActive = isset($_POST['is_active']) ? 1 : 0;
+            $userData = [
+                'username' => $_POST['username'] ?? '',
+                'first_name' => $_POST['first_name'] ?? '',
+                'last_name' => $_POST['last_name'] ?? '',
+                'email' => $_POST['email'] ?? '',
+                'role' => $_POST['role'] ?? 'user',
+                'status' => $_POST['status'] ?? 'active'
+            ];
             
-            $stmt = $conn->prepare("UPDATE users SET email = ?, role = ?, first_name = ?, last_name = ?, phone = ?, is_active = ? WHERE id = ?");
-            
-            if ($stmt->execute([$email, $role, $firstName, $lastName, $phone, $isActive, $id])) {
+            if ($this->userModel->update($id, $userData)) {
                 header('Location: index.php?action=admin&method=users&success=updated');
             } else {
                 header('Location: index.php?action=admin&method=users&error=update_failed');
@@ -100,25 +106,22 @@ class AdminController {
             exit;
         }
         
-        $stmt = $conn->prepare("SELECT * FROM users WHERE id = ?");
-        $stmt->execute([$id]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+        $user = $this->userModel->getById($id);
         if (!$user) {
             header('Location: index.php?action=admin&method=users&error=not_found');
             exit;
         }
         
-        include 'views/admin/edit_user.php';
+        $page_title = 'Edit User - Admin';
+        $action = 'admin';
+        $method = 'editUser';
+        
+        $content_file = __DIR__ . '/../views/admin/edit_user_content.php';
+        include 'views/layouts/main.php';
     }
 
     public function deleteUser($id) {
-        $database = new Database();
-        $conn = $database->getConnection();
-        
-        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
-        
-        if ($stmt->execute([$id])) {
+        if ($this->userModel->delete($id)) {
             header('Location: index.php?action=admin&method=users&success=deleted');
         } else {
             header('Location: index.php?action=admin&method=users&error=delete_failed');
@@ -142,20 +145,15 @@ class AdminController {
 
     public function createVehicle() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $database = new Database();
-            $conn = $database->getConnection();
+            $vehicleData = [
+                'vehicle_id' => $_POST['vehicle_id'] ?? '',
+                'vehicle_type' => $_POST['vehicle_type'] ?? '',
+                'model' => $_POST['model'] ?? '',
+                'capacity' => $_POST['capacity'] ?? '',
+                'status' => $_POST['status'] ?? 'available'
+            ];
             
-            $vehicleId = $_POST['vehicle_id'] ?? '';
-            $vehicleType = $_POST['vehicle_type'] ?? '';
-            $model = $_POST['model'] ?? '';
-            $year = $_POST['year'] ?? '';
-            $licensePlate = $_POST['license_plate'] ?? '';
-            $capacity = $_POST['capacity'] ?? '';
-            $status = $_POST['status'] ?? 'available';
-            
-            $stmt = $conn->prepare("INSERT INTO vehicles (vehicle_id, vehicle_type, model, year, license_plate, capacity, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            
-            if ($stmt->execute([$vehicleId, $vehicleType, $model, $year, $licensePlate, $capacity, $status])) {
+            if ($this->vehicleModel->create($vehicleData)) {
                 header('Location: index.php?action=admin&method=vehicles&success=created');
             } else {
                 header('Location: index.php?action=admin&method=vehicles&error=create_failed');
@@ -163,25 +161,25 @@ class AdminController {
             exit;
         }
         
-        include 'views/admin/create_vehicle.php';
+        $page_title = 'Create Vehicle - Admin';
+        $action = 'admin';
+        $method = 'createVehicle';
+        
+        $content_file = __DIR__ . '/../views/admin/create_vehicle_content.php';
+        include 'views/layouts/main.php';
     }
 
     public function editVehicle($id) {
-        $database = new Database();
-        $conn = $database->getConnection();
-        
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $vehicleId = $_POST['vehicle_id'] ?? '';
-            $vehicleType = $_POST['vehicle_type'] ?? '';
-            $model = $_POST['model'] ?? '';
-            $year = $_POST['year'] ?? '';
-            $licensePlate = $_POST['license_plate'] ?? '';
-            $capacity = $_POST['capacity'] ?? '';
-            $status = $_POST['status'] ?? 'available';
+            $vehicleData = [
+                'vehicle_id' => $_POST['vehicle_id'] ?? '',
+                'vehicle_type' => $_POST['vehicle_type'] ?? '',
+                'model' => $_POST['model'] ?? '',
+                'capacity' => $_POST['capacity'] ?? '',
+                'status' => $_POST['status'] ?? 'available'
+            ];
             
-            $stmt = $conn->prepare("UPDATE vehicles SET vehicle_id = ?, vehicle_type = ?, model = ?, year = ?, license_plate = ?, capacity = ?, status = ? WHERE id = ?");
-            
-            if ($stmt->execute([$vehicleId, $vehicleType, $model, $year, $licensePlate, $capacity, $status, $id])) {
+            if ($this->vehicleModel->update($id, $vehicleData)) {
                 header('Location: index.php?action=admin&method=vehicles&success=updated');
             } else {
                 header('Location: index.php?action=admin&method=vehicles&error=update_failed');
@@ -189,25 +187,22 @@ class AdminController {
             exit;
         }
         
-        $stmt = $conn->prepare("SELECT * FROM vehicles WHERE id = ?");
-        $stmt->execute([$id]);
-        $vehicle = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+        $vehicle = $this->vehicleModel->getById($id);
         if (!$vehicle) {
             header('Location: index.php?action=admin&method=vehicles&error=not_found');
             exit;
         }
         
-        include 'views/admin/edit_vehicle.php';
+        $page_title = 'Edit Vehicle - Admin';
+        $action = 'admin';
+        $method = 'editVehicle';
+        
+        $content_file = __DIR__ . '/../views/admin/edit_vehicle_content.php';
+        include 'views/layouts/main.php';
     }
 
     public function deleteVehicle($id) {
-        $database = new Database();
-        $conn = $database->getConnection();
-        
-        $stmt = $conn->prepare("DELETE FROM vehicles WHERE id = ?");
-        
-        if ($stmt->execute([$id])) {
+        if ($this->vehicleModel->delete($id)) {
             header('Location: index.php?action=admin&method=vehicles&success=deleted');
         } else {
             header('Location: index.php?action=admin&method=vehicles&error=delete_failed');
@@ -231,19 +226,17 @@ class AdminController {
 
     public function createDriver() {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $database = new Database();
-            $conn = $database->getConnection();
+            $driverData = [
+                'driver_id' => $_POST['driver_id'] ?? '',
+                'first_name' => $_POST['first_name'] ?? '',
+                'last_name' => $_POST['last_name'] ?? '',
+                'phone' => $_POST['phone'] ?? '',
+                'email' => $_POST['email'] ?? '',
+                'license_number' => $_POST['license_number'] ?? '',
+                'status' => $_POST['status'] ?? 'available'
+            ];
             
-            $driverId = $_POST['driver_id'] ?? '';
-            $userId = $_POST['user_id'] ?? '';
-            $licenseNumber = $_POST['license_number'] ?? '';
-            $licenseType = $_POST['license_type'] ?? '';
-            $experienceYears = $_POST['experience_years'] ?? '';
-            $status = $_POST['status'] ?? 'available';
-            
-            $stmt = $conn->prepare("INSERT INTO drivers (driver_id, user_id, license_number, license_type, experience_years, status) VALUES (?, ?, ?, ?, ?, ?)");
-            
-            if ($stmt->execute([$driverId, $userId, $licenseNumber, $licenseType, $experienceYears, $status])) {
+            if ($this->driverModel->create($driverData)) {
                 header('Location: index.php?action=admin&method=drivers&success=created');
             } else {
                 header('Location: index.php?action=admin&method=drivers&error=create_failed');
@@ -251,33 +244,27 @@ class AdminController {
             exit;
         }
         
-        // Get available users for driver assignment
-        $database = new Database();
-        $conn = $database->getConnection();
-        $users = [];
-        if ($conn) {
-            $stmt = $conn->query("SELECT id, username, first_name, last_name FROM users WHERE role = 'driver'");
-            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        }
+        $page_title = 'Create Driver - Admin';
+        $action = 'admin';
+        $method = 'createDriver';
         
-        include 'views/admin/create_driver.php';
+        $content_file = __DIR__ . '/../views/admin/create_driver_content.php';
+        include 'views/layouts/main.php';
     }
 
     public function editDriver($id) {
-        $database = new Database();
-        $conn = $database->getConnection();
-        
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-            $driverId = $_POST['driver_id'] ?? '';
-            $userId = $_POST['user_id'] ?? '';
-            $licenseNumber = $_POST['license_number'] ?? '';
-            $licenseType = $_POST['license_type'] ?? '';
-            $experienceYears = $_POST['experience_years'] ?? '';
-            $status = $_POST['status'] ?? 'available';
+            $driverData = [
+                'driver_id' => $_POST['driver_id'] ?? '',
+                'first_name' => $_POST['first_name'] ?? '',
+                'last_name' => $_POST['last_name'] ?? '',
+                'phone' => $_POST['phone'] ?? '',
+                'email' => $_POST['email'] ?? '',
+                'license_number' => $_POST['license_number'] ?? '',
+                'status' => $_POST['status'] ?? 'available'
+            ];
             
-            $stmt = $conn->prepare("UPDATE drivers SET driver_id = ?, user_id = ?, license_number = ?, license_type = ?, experience_years = ?, status = ? WHERE id = ?");
-            
-            if ($stmt->execute([$driverId, $userId, $licenseNumber, $licenseType, $experienceYears, $status, $id])) {
+            if ($this->driverModel->update($id, $driverData)) {
                 header('Location: index.php?action=admin&method=drivers&success=updated');
             } else {
                 header('Location: index.php?action=admin&method=drivers&error=update_failed');
@@ -285,32 +272,22 @@ class AdminController {
             exit;
         }
         
-        $stmt = $conn->prepare("SELECT * FROM drivers WHERE id = ?");
-        $stmt->execute([$id]);
-        $driver = $stmt->fetch(PDO::FETCH_ASSOC);
-        
+        $driver = $this->driverModel->getById($id);
         if (!$driver) {
             header('Location: index.php?action=admin&method=drivers&error=not_found');
             exit;
         }
         
-        // Get available users for driver assignment
-        $users = [];
-        if ($conn) {
-            $stmt = $conn->query("SELECT id, username, first_name, last_name FROM users WHERE role = 'driver'");
-            $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        }
+        $page_title = 'Edit Driver - Admin';
+        $action = 'admin';
+        $method = 'editDriver';
         
-        include 'views/admin/edit_driver.php';
+        $content_file = __DIR__ . '/../views/admin/edit_driver_content.php';
+        include 'views/layouts/main.php';
     }
 
     public function deleteDriver($id) {
-        $database = new Database();
-        $conn = $database->getConnection();
-        
-        $stmt = $conn->prepare("DELETE FROM drivers WHERE id = ?");
-        
-        if ($stmt->execute([$id])) {
+        if ($this->driverModel->delete($id)) {
             header('Location: index.php?action=admin&method=drivers&success=deleted');
         } else {
             header('Location: index.php?action=admin&method=drivers&error=delete_failed');

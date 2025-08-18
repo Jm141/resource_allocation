@@ -1,6 +1,7 @@
 <?php
-require_once 'models/Incident.php';
-require_once 'models/Deployment.php';
+require_once __DIR__ . '/../models/Incident.php';
+require_once __DIR__ . '/../models/Deployment.php';
+require_once __DIR__ . '/../config/database.php';
 
 class IncidentController {
     private $incidentModel;
@@ -13,7 +14,7 @@ class IncidentController {
 
     public function index() {
         $incidents = $this->incidentModel->getAll();
-        $statusCounts = $this->incidentModel->getCountByStatus();
+        $statusCounts = $this->incidentModel->getCountByStatusGrouped();
         
         include 'views/incidents/index.php';
     }

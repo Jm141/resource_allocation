@@ -1,8 +1,9 @@
 <?php
-require_once 'models/Deployment.php';
-require_once 'models/Incident.php';
-require_once 'models/Facility.php';
-require_once 'config/database.php';
+require_once __DIR__ . '/../models/Incident.php';
+require_once __DIR__ . '/../models/Deployment.php';
+require_once __DIR__ . '/../models/Driver.php';
+require_once __DIR__ . '/../models/Facility.php';
+require_once __DIR__ . '/../config/database.php';
 
 class DeploymentController {
     private $deploymentModel;
@@ -17,7 +18,7 @@ class DeploymentController {
 
     public function index() {
         $deployments = $this->deploymentModel->getAll();
-        $statusCounts = $this->deploymentModel->getCountByStatus();
+        $statusCounts = $this->deploymentModel->getCountByStatusGrouped();
         
         include 'views/deployments/index.php';
     }
@@ -48,6 +49,14 @@ class DeploymentController {
             ];
 
             if ($this->deploymentModel->create($data)) {
+                // Mark driver as deployed (in use)
+                $driverModel = new Driver();
+                $driverModel->markAsDeployed($data['driver_id']);
+                
+                // Mark vehicle as deployed (in use)
+                $vehicleModel = new Vehicle();
+                $vehicleModel->updateStatus($data['vehicle_id'], 'deployed');
+                
                 // Update incident status to 'assigned'
                 $this->incidentModel->updateStatus($data['incident_id'], 'assigned');
                 
@@ -91,7 +100,7 @@ class DeploymentController {
         $page_title = 'Smart Deployment Creation - Resource Allocation System';
         $action = 'deployments';
         
-        $content_file = __DIR__ . '/../deployments/create_smart.php';
+        $content_file = __DIR__ . '/../views/deployments/create_smart.php';
         include 'views/layouts/main.php';
     }
 
@@ -560,12 +569,90 @@ class DeploymentController {
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $status = $_POST['status'] ?? '';
             
+            // Add debugging
+            error_log("DeploymentController::updateStatus - ID: $id, Status: $status");
+            error_log("POST data: " . print_r($_POST, true));
+            error_log("Request method: " . $_SERVER['REQUEST_METHOD']);
+            
+            if (empty($status)) {
+                error_log("DeploymentController::updateStatus - Status is empty");
+                echo json_encode(['success' => false, 'message' => 'Status is required']);
+                return;
+            }
+            
             if ($this->deploymentModel->updateStatus($id, $status)) {
+                // Get deployment details to update driver, vehicle, and incident status
+                $deployment = $this->deploymentModel->getById($id);
+                if ($deployment) {
+                    $driverModel = new Driver();
+                    $vehicleModel = new Vehicle();
+                    $incidentModel = new Incident();
+                    
+                    // Update driver and vehicle status based on deployment status
+                    switch ($status) {
+                        case 'completed':
+                        case 'cancelled':
+                            // Mark driver as available when deployment is completed or cancelled
+                            $driverModel->markAsAvailable($deployment['driver_id']);
+                            // Mark vehicle as available
+                            $vehicleModel->updateStatus($deployment['vehicle_id'], 'available');
+                            
+                            // Update incident status when deployment is completed
+                            if ($status === 'completed' && $deployment['incident_id']) {
+                                // Check if this is the only active deployment for this incident
+                                $activeDeploymentsForIncident = $this->deploymentModel->getByIncidentAndStatus(
+                                    $deployment['incident_id'], 
+                                    ['dispatched', 'en_route', 'on_scene', 'returning']
+                                );
+                                
+                                // If no other active deployments, mark incident as resolved
+                                if (empty($activeDeploymentsForIncident)) {
+                                    $incidentModel->updateStatus($deployment['incident_id'], 'resolved');
+                                    error_log("DeploymentController::updateStatus - Incident {$deployment['incident_id']} marked as resolved");
+                                    
+                                    // Also check if there are any other deployments for this incident
+                                    $allDeploymentsForIncident = $this->deploymentModel->getByIncident($deployment['incident_id']);
+                                    $completedDeployments = array_filter($allDeploymentsForIncident, function($dep) {
+                                        return $dep['status'] === 'completed';
+                                    });
+                                    
+                                    // If all deployments are completed, mark incident as closed
+                                    if (count($completedDeployments) === count($allDeploymentsForIncident)) {
+                                        $incidentModel->updateStatus($deployment['incident_id'], 'closed');
+                                        error_log("DeploymentController::updateStatus - Incident {$deployment['incident_id']} marked as closed (all deployments completed)");
+                                    }
+                                } else {
+                                    error_log("DeploymentController::updateStatus - Incident {$deployment['incident_id']} has other active deployments, status unchanged");
+                                }
+                            }
+                            break;
+                            
+                        case 'dispatched':
+                        case 'en_route':
+                        case 'on_scene':
+                        case 'returning':
+                            // Mark driver as deployed when deployment is active
+                            $driverModel->markAsDeployed($deployment['driver_id']);
+                            // Mark vehicle as deployed (in use)
+                            $vehicleModel->updateStatus($deployment['vehicle_id'], 'deployed');
+                            
+                            // Update incident status to in_progress when deployment is active
+                            if ($deployment['incident_id']) {
+                                $incidentModel->updateStatus($deployment['incident_id'], 'in_progress');
+                                error_log("DeploymentController::updateStatus - Incident {$deployment['incident_id']} marked as in_progress");
+                            }
+                            break;
+                    }
+                }
+                
+                error_log("DeploymentController::updateStatus - Success");
                 echo json_encode(['success' => true, 'message' => 'Status updated successfully']);
             } else {
+                error_log("DeploymentController::updateStatus - Failed");
                 echo json_encode(['success' => false, 'message' => 'Failed to update status']);
             }
         } else {
+            error_log("DeploymentController::updateStatus - Invalid request method: " . $_SERVER['REQUEST_METHOD']);
             echo json_encode(['success' => false, 'message' => 'Invalid request method']);
         }
     }
@@ -612,37 +699,262 @@ class DeploymentController {
         }
     }
 
+    public function autoDeployUnreportedIncidents() {
+        try {
+            // Get all incidents that haven't been deployed yet
+            $unreportedIncidents = $this->incidentModel->getByStatus('reported');
+            
+            if (empty($unreportedIncidents)) {
+                echo json_encode(['message' => 'No unreported incidents found', 'deployments_created' => 0]);
+                return;
+            }
+            
+            $deploymentsCreated = 0;
+            $deploymentResults = [];
+            
+            foreach ($unreportedIncidents as $incident) {
+                $deploymentResult = $this->createAutoDeployment($incident);
+                if ($deploymentResult['success']) {
+                    $deploymentsCreated++;
+                    $deploymentResults[] = $deploymentResult;
+                }
+            }
+            
+            echo json_encode([
+                'success' => true,
+                'message' => "Auto-deployment completed. {$deploymentsCreated} deployments created.",
+                'deployments_created' => $deploymentsCreated,
+                'results' => $deploymentResults
+            ]);
+            
+        } catch (Exception $e) {
+            echo json_encode(['error' => 'Auto-deployment failed: ' . $e->getMessage()]);
+        }
+    }
+
     private function getAllDrivers() {
         try {
-            $database = new Database();
-            $conn = $database->getConnection();
-            
-            $query = "SELECT d.*, u.first_name, u.last_name 
-                      FROM drivers d 
-                      LEFT JOIN users u ON d.user_id = u.id 
-                      WHERE d.status = 'active' 
-                      ORDER BY u.first_name, u.last_name";
-            
-            $stmt = $conn->prepare($query);
-            $stmt->execute();
-            return $stmt->fetchAll();
+            $driverModel = new Driver();
+            return $driverModel->getAll();
         } catch (Exception $e) {
+            error_log("Failed to get all drivers: " . $e->getMessage());
             return [];
         }
     }
 
     private function getAllVehicles() {
         try {
-            $database = new Database();
-            $conn = $database->getConnection();
-            
-            $query = "SELECT * FROM vehicles WHERE status = 'available' ORDER BY vehicle_type, vehicle_id";
-            
-            $stmt = $conn->prepare($query);
-            $stmt->execute();
-            return $stmt->fetchAll();
+            $vehicleModel = new Vehicle();
+            return $vehicleModel->getAll();
         } catch (Exception $e) {
+            error_log("Failed to get all vehicles: " . $e->getMessage());
             return [];
+        }
+    }
+
+    private function createAutoDeployment($incident) {
+        try {
+            // Get optimal facilities for this incident
+            $facilities = $this->facilityModel->getFacilitiesForIncident(
+                $incident['category_name'] ?? 'medical',
+                $incident['latitude'],
+                $incident['longitude']
+            );
+            
+            if (empty($facilities)) {
+                return ['success' => false, 'message' => 'No suitable facilities found'];
+            }
+            
+            // Get available drivers and vehicles
+            $availableDrivers = $this->getAvailableDrivers();
+            $availableVehicles = $this->getAvailableVehicles();
+            
+            if (empty($availableDrivers) || empty($availableVehicles)) {
+                return ['success' => false, 'message' => 'No available drivers or vehicles'];
+            }
+            
+            // Select best driver and vehicle
+            $selectedDriver = $this->selectBestDriver($availableDrivers, $incident);
+            $selectedVehicle = $this->selectBestVehicle($availableVehicles, $incident);
+            
+            if (!$selectedDriver || !$selectedVehicle) {
+                return ['success' => false, 'message' => 'Could not select optimal driver/vehicle'];
+            }
+            
+            // Create deployment data
+            $deploymentData = [
+                'incident_id' => $incident['id'],
+                'driver_id' => $selectedDriver['id'],
+                'vehicle_id' => $selectedVehicle['id'],
+                'start_location' => 'Bago City Emergency Response Headquarters',
+                'start_lat' => 10.526071,
+                'start_lng' => 122.841451,
+                'end_location' => $incident['location_name'],
+                'end_lat' => $incident['latitude'],
+                'end_lng' => $incident['longitude']
+            ];
+            
+            // Create the deployment
+            if ($this->deploymentModel->create($deploymentData)) {
+                // Update incident status to assigned
+                $this->incidentModel->updateStatus($incident['id'], 'assigned');
+                
+                // Mark driver as deployed (in use)
+                $driverModel = new Driver();
+                $driverModel->markAsDeployed($selectedDriver['id']);
+                
+                // Mark vehicle as deployed (in use)
+                $vehicleModel = new Vehicle();
+                $vehicleModel->updateStatus($selectedVehicle['id'], 'deployed');
+                
+                return [
+                    'success' => true,
+                    'deployment_id' => $deploymentData['deployment_id'] ?? 'AUTO_' . time(),
+                    'incident' => $incident['title'],
+                    'driver' => $selectedDriver['driver_id'],
+                    'vehicle' => $selectedVehicle['vehicle_id'],
+                    'facility' => $facilities[0]['name'] ?? 'Nearest facility'
+                ];
+            } else {
+                return ['success' => false, 'message' => 'Failed to create deployment'];
+            }
+            
+        } catch (Exception $e) {
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
+        }
+    }
+
+    private function getAvailableDrivers() {
+        try {
+            $driverModel = new Driver();
+            return $driverModel->getAvailable();
+        } catch (Exception $e) {
+            error_log("Failed to get available drivers: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    private function getAvailableVehicles() {
+        try {
+            $vehicleModel = new Vehicle();
+            return $vehicleModel->getAvailable();
+        } catch (Exception $e) {
+            error_log("Failed to get available vehicles: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    private function selectBestDriver($drivers, $incident) {
+        // Simple selection logic - can be enhanced with more sophisticated algorithms
+        if (empty($drivers)) return null;
+        
+        // For now, just return the first available driver
+        // Future: implement driver selection based on:
+        // - Distance from incident
+        // - Driver experience with incident type
+        // - Current workload
+        // - Specialization
+        return $drivers[0];
+    }
+
+    private function selectBestVehicle($vehicles, $incident) {
+        if (empty($vehicles)) return null;
+        
+        // Select vehicle based on incident type
+        $incidentType = $incident['category_name'] ?? 'medical';
+        $priorityVehicleTypes = [
+            'fire' => ['fire_truck', 'rescue_vehicle'],
+            'medical' => ['ambulance', 'medical_vehicle'],
+            'police' => ['police_vehicle', 'patrol_car'],
+            'traffic_accident' => ['ambulance', 'police_vehicle', 'tow_truck'],
+            'natural_disaster' => ['fire_truck', 'rescue_vehicle', 'ambulance']
+        ];
+        
+        $preferredTypes = $priorityVehicleTypes[$incidentType] ?? ['ambulance'];
+        
+        // Try to find preferred vehicle type first
+        foreach ($preferredTypes as $type) {
+            foreach ($vehicles as $vehicle) {
+                if (stripos($vehicle['vehicle_type'], $type) !== false) {
+                    return $vehicle;
+                }
+            }
+        }
+        
+        // Fallback to first available vehicle
+        return $vehicles[0];
+    }
+
+    private function updateResourceAvailability($driverId, $vehicleId) {
+        try {
+            $driverModel = new Driver();
+            $vehicleModel = new Vehicle();
+            
+            // Update driver status to deployed (in use)
+            $driverModel->markAsDeployed($driverId);
+            
+            // Update vehicle status to deployed (in use)
+            $vehicleModel->updateStatus($vehicleId, 'deployed');
+            
+            return true;
+        } catch (Exception $e) {
+            error_log("Failed to update resource availability: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Release resources (driver and vehicle) when deployment is completed or cancelled
+     */
+    private function releaseResources($deploymentId) {
+        try {
+            $deployment = $this->deploymentModel->getById($deploymentId);
+            if (!$deployment) {
+                return false;
+            }
+            
+            $driverModel = new Driver();
+            $vehicleModel = new Vehicle();
+            
+            // Mark driver as available
+            $driverModel->markAsAvailable($deployment['driver_id']);
+            
+            // Mark vehicle as available
+            $vehicleModel->updateStatus($deployment['vehicle_id'], 'available');
+            
+            error_log("Resources released for deployment {$deploymentId}");
+            return true;
+            
+        } catch (Exception $e) {
+            error_log("Failed to release resources for deployment {$deploymentId}: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Check if driver and vehicle are available for deployment
+     */
+    private function checkDriverVehicleAvailability($driverId, $vehicleId) {
+        try {
+            $driverModel = new Driver();
+            $vehicleModel = new Vehicle();
+            
+            $driverAvailable = $driverModel->isAvailable($driverId);
+            $vehicleAvailable = $vehicleModel->isAvailable($vehicleId);
+            
+            return [
+                'driver_available' => $driverAvailable,
+                'vehicle_available' => $vehicleAvailable,
+                'both_available' => $driverAvailable && $vehicleAvailable
+            ];
+            
+        } catch (Exception $e) {
+            error_log("Failed to check driver/vehicle availability: " . $e->getMessage());
+            return [
+                'driver_available' => false,
+                'vehicle_available' => false,
+                'both_available' => false
+            ];
         }
     }
 }

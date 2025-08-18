@@ -297,7 +297,13 @@
                 <i class="fas fa-plus-circle"></i> Report Incident
             </a>
             <a class="nav-link <?= $action == 'hotline' ? 'active' : '' ?>" href="index.php?action=hotline">
-                <i class="fas fa-phone-alt"></i> Emergency Hotline
+                <i class="fas fa-phone-alt"></i>
+                <span>Hotline Dashboard</span>
+            </a>
+            
+            <a class="nav-link <?= $action == 'driver' ? 'active' : '' ?>" href="index.php?action=driver">
+                <i class="fas fa-user-tie"></i>
+                <span>Driver Dashboard</span>
             </a>
             
             <!-- Admin Section -->

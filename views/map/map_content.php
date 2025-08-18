@@ -343,6 +343,12 @@ function updateIncidentsOnMap(incidents) {
     incidentMarkers.forEach(marker => map.removeLayer(marker));
     incidentMarkers = [];
     
+    // Check if incidents is defined and is an array
+    if (!incidents || !Array.isArray(incidents)) {
+        console.log('No incidents data available or invalid format');
+        return;
+    }
+    
     // Filter only active incidents
     const activeIncidents = incidents.filter(incident => 
         ['reported', 'assigned', 'in_progress'].includes(incident.status)
@@ -381,6 +387,12 @@ function updateDeploymentsOnMap(deployments) {
     // Clear existing deployment markers
     deploymentMarkers.forEach(marker => map.removeLayer(marker));
     deploymentMarkers = [];
+    
+    // Check if deployments is defined and is an array
+    if (!deployments || !Array.isArray(deployments)) {
+        console.log('No deployments data available or invalid format');
+        return;
+    }
     
     // Filter only active deployments
     const activeDeployments = deployments.filter(deployment => 
@@ -442,6 +454,12 @@ function updateFacilitiesOnMap(facilities) {
     facilityMarkers.forEach(marker => map.removeLayer(marker));
     facilityMarkers = [];
     
+    // Check if facilities is defined and is an array
+    if (!facilities || !Array.isArray(facilities)) {
+        console.log('No facilities data available or invalid format');
+        return;
+    }
+    
     facilities.forEach(facility => {
         const icon = L.divIcon({
             html: `<i class="${facility.icon.icon}" style="color: ${facility.icon.color}; font-size: 20px;"></i>`,
@@ -473,6 +491,14 @@ function updateFacilitiesOnMap(facilities) {
 function updateIncidentsPanel(incidents) {
     const container = document.getElementById('activeIncidents');
     const countBadge = document.getElementById('incidentCount');
+    
+    // Check if incidents is defined and is an array
+    if (!incidents || !Array.isArray(incidents)) {
+        console.log('No incidents data available or invalid format for panel');
+        if (countBadge) countBadge.textContent = '0';
+        container.innerHTML = '<div class="text-center text-muted">No incidents data available</div>';
+        return;
+    }
     
     // Filter only active incidents
     const activeIncidents = incidents.filter(incident => 
@@ -509,6 +535,14 @@ function updateIncidentsPanel(incidents) {
 function updateDeploymentsPanel(deployments) {
     const container = document.getElementById('activeDeployments');
     const countBadge = document.getElementById('deploymentCount');
+    
+    // Check if deployments is defined and is an array
+    if (!deployments || !Array.isArray(deployments)) {
+        console.log('No deployments data available or invalid format for panel');
+        if (countBadge) countBadge.textContent = '0';
+        container.innerHTML = '<div class="text-center text-muted">No deployments data available</div>';
+        return;
+    }
     
     // Filter only active deployments
     const activeDeployments = deployments.filter(deployment => 
@@ -547,6 +581,13 @@ function updateDeploymentsPanel(deployments) {
 
 function updateFacilitiesPanel(facilities) {
     const container = document.getElementById('emergencyFacilities');
+    
+    // Check if facilities is defined and is an array
+    if (!facilities || !Array.isArray(facilities)) {
+        console.log('No facilities data available or invalid format for panel');
+        container.innerHTML = '<div class="text-center text-muted">No facilities data available</div>';
+        return;
+    }
     
     if (!facilities || facilities.length === 0) {
         container.innerHTML = '<div class="text-center text-muted">No facilities found</div>';
